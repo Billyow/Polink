@@ -1,10 +1,12 @@
 package com.polink.common.exception;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -33,18 +35,24 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
-    void handleMaxUploadAndAccessDeniedAndGenericShouldReturnStructuredError() {
+    void handleMaxUploadAndAccessDeniedAndBadRequestAndDataIntegrityAndGenericShouldReturnStructuredError() {
         MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/v1/tutor/offerings");
 
         ResponseEntity<ApiErrorResponse> tooLarge = handler.handleMaxUploadSize(
                 new MaxUploadSizeExceededException(5 * 1024 * 1024), request);
         ResponseEntity<ApiErrorResponse> forbidden = handler.handleAccessDenied(
                 new AccessDeniedException("Denied"), request);
+        ResponseEntity<ApiErrorResponse> badRequest = handler.handleBadRequestExceptions(
+                new MissingServletRequestParameterException("branchId", "UUID"), request);
+        ResponseEntity<ApiErrorResponse> dataIntegrity = handler.handleDataIntegrityViolation(
+                new DataIntegrityViolationException("Duplicate key"), request);
         ResponseEntity<ApiErrorResponse> internal = handler.handleGenericException(
                 new RuntimeException("Unexpected"), request);
 
         assertThat(tooLarge.getStatusCode()).isEqualTo(HttpStatus.PAYLOAD_TOO_LARGE);
         assertThat(forbidden.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(badRequest.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(dataIntegrity.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
         assertThat(internal.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
     }
 }

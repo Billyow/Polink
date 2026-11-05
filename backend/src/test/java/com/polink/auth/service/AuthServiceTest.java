@@ -134,7 +134,7 @@ class AuthServiceTest {
     }
 
     @Test
-    void forgotAndResetPasswordShouldIssueAndConsumeSingleUseToken() {
+    void forgotAndResetPasswordShouldIssueAndConsumeSingleUseHashedTokenWithoutLeakingInApp() {
         UUID userId = UUID.randomUUID();
         UserEntity user = UserEntity.builder()
                 .id(userId)
@@ -155,6 +155,24 @@ class AuthServiceTest {
         verify(passwordResetTokenRepository).save(tokenCaptor.capture());
         PasswordResetTokenEntity issuedToken = tokenCaptor.getValue();
         assertThat(issuedToken.isUsed()).isFalse();
+        assertThat(issuedToken.getToken()).hasSize(64);
+
+        ArgumentCaptor<String> inAppMessageCaptor = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> emailBodyCaptor = ArgumentCaptor.forClass(String.class);
+        verify(notificationService).notifyUserWithSeparateEmailBody(
+                eq(userId),
+                eq("andres@polink.edu.co"),
+                eq("Recuperación de contraseña"),
+                inAppMessageCaptor.capture(),
+                emailBodyCaptor.capture(),
+                eq("PASSWORD_RESET_REQUESTED"),
+                eq(issuedToken.getId())
+        );
+
+        String emailBody = emailBodyCaptor.getValue();
+        String rawToken = emailBody.substring(emailBody.indexOf("token=") + "token=".length()).trim();
+        assertThat(inAppMessageCaptor.getValue()).doesNotContain(rawToken);
+        assertThat(AuthService.hashToken(rawToken)).isEqualTo(issuedToken.getToken());
 
         when(passwordResetTokenRepository.findByTokenAndUsedFalse(issuedToken.getToken()))
                 .thenReturn(Optional.of(issuedToken));
@@ -162,7 +180,7 @@ class AuthServiceTest {
         when(passwordEncoder.encode("NuevaClave2026!")).thenReturn("new-hash");
 
         MessageResponseDto resetResp = authService.resetPassword(
-                new ResetPasswordRequestDto(issuedToken.getToken(), "NuevaClave2026!")
+                new ResetPasswordRequestDto(rawToken, "NuevaClave2026!")
         );
 
         assertThat(resetResp.message()).contains("exitosamente");
@@ -171,22 +189,53 @@ class AuthServiceTest {
     }
 
     @Test
-    void resetPasswordShouldRejectExpiredToken() {
+    void resetPasswordShouldRejectExpiredTokenAndSuspendedUsers() {
+        String rawExpired = "expired-token";
         PasswordResetTokenEntity expired = PasswordResetTokenEntity.builder()
                 .id(UUID.randomUUID())
                 .userId(UUID.randomUUID())
-                .token("expired-token")
+                .token(AuthService.hashToken(rawExpired))
                 .expiresAt(Instant.now().minusSeconds(60))
                 .used(false)
                 .createdAt(Instant.now().minusSeconds(3600))
                 .build();
 
-        when(passwordResetTokenRepository.findByTokenAndUsedFalse("expired-token"))
+        when(passwordResetTokenRepository.findByTokenAndUsedFalse(AuthService.hashToken(rawExpired)))
                 .thenReturn(Optional.of(expired));
 
-        assertThatThrownBy(() -> authService.resetPassword(new ResetPasswordRequestDto("expired-token", "NuevaClave2026!")))
+        assertThatThrownBy(() -> authService.resetPassword(new ResetPasswordRequestDto(rawExpired, "NuevaClave2026!")))
                 .isInstanceOf(DomainException.class)
                 .hasMessageContaining("expirado");
         assertThat(expired.isUsed()).isTrue();
+
+        UUID suspendedUserId = UUID.randomUUID();
+        String rawSuspendedToken = "suspended-user-token";
+        PasswordResetTokenEntity validTokenForSuspended = PasswordResetTokenEntity.builder()
+                .id(UUID.randomUUID())
+                .userId(suspendedUserId)
+                .token(AuthService.hashToken(rawSuspendedToken))
+                .expiresAt(Instant.now().plusSeconds(600))
+                .used(false)
+                .createdAt(Instant.now())
+                .build();
+        UserEntity suspendedUser = UserEntity.builder()
+                .id(suspendedUserId)
+                .fullName("Suspendido")
+                .email("susp@polink.edu.co")
+                .passwordHash("hash")
+                .status("SUSPENDED")
+                .createdAt(Instant.now())
+                .updatedAt(Instant.now())
+                .build();
+
+        when(passwordResetTokenRepository.findByTokenAndUsedFalse(AuthService.hashToken(rawSuspendedToken)))
+                .thenReturn(Optional.of(validTokenForSuspended));
+        when(userRepository.findById(suspendedUserId)).thenReturn(Optional.of(suspendedUser));
+
+        assertThatThrownBy(() -> authService.resetPassword(new ResetPasswordRequestDto(rawSuspendedToken, "NuevaClave2026!")))
+                .isInstanceOf(DomainException.class)
+                .extracting("status")
+                .isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(validTokenForSuspended.isUsed()).isTrue();
     }
 }

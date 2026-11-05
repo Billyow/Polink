@@ -64,10 +64,22 @@ class CatalogServiceTest {
                 eq(created.id()),
                 any()
         );
+
+        SubjectBranchEntity existing = new SubjectBranchEntity(created.id(), "Ciencias Básicas", "Desc", true, Instant.now());
+        when(branchRepository.findById(created.id())).thenReturn(Optional.of(existing));
+        when(branchRepository.existsByNameIgnoreCaseAndIdNot("Ciencias Exactas", created.id())).thenReturn(false);
+
+        BranchResponseDto updated = catalogService.updateBranch(
+                adminId,
+                created.id(),
+                new BranchRequestDto("Ciencias Exactas", "Nueva desc", false)
+        );
+        assertThat(updated.name()).isEqualTo("Ciencias Exactas");
+        assertThat(updated.active()).isFalse();
     }
 
     @Test
-    void createSubjectShouldValidateUniqueCodeAndBranchAndRecordAudit() {
+    void createAndUpdateSubjectShouldValidateUniqueCodeAndBranchAndRecordAudit() {
         UUID adminId = UUID.randomUUID();
         UUID branchId = UUID.randomUUID();
         SubjectBranchEntity branch = SubjectBranchEntity.builder()
@@ -97,6 +109,18 @@ class CatalogServiceTest {
                 any()
         );
 
+        SubjectEntity existingSubj = new SubjectEntity(subject.id(), branch, "CB-105", "Ecuaciones Diferenciales", true, Instant.now());
+        when(subjectRepository.findById(subject.id())).thenReturn(Optional.of(existingSubj));
+        when(subjectRepository.existsByCodeIgnoreCaseAndIdNot("CB-106", subject.id())).thenReturn(false);
+
+        SubjectResponseDto updatedSubj = catalogService.updateSubject(
+                adminId,
+                subject.id(),
+                new SubjectRequestDto(branchId, "cb-106", "Ecuaciones Avanzadas", false)
+        );
+        assertThat(updatedSubj.code()).isEqualTo("CB-106");
+        assertThat(updatedSubj.active()).isFalse();
+
         when(subjectRepository.existsByCodeIgnoreCase("CB-105")).thenReturn(true);
         assertThatThrownBy(() -> catalogService.createSubject(
                 adminId,
@@ -105,16 +129,21 @@ class CatalogServiceTest {
     }
 
     @Test
-    void listPublicSubjectsShouldFilterByBranchWhenProvided() {
+    void listPublicAndAdminSubjectsShouldFilterProperly() {
         UUID branchId = UUID.randomUUID();
         SubjectBranchEntity branch = new SubjectBranchEntity(branchId, "Ciencias Básicas", "Desc", true, Instant.now());
         SubjectEntity subj = new SubjectEntity(UUID.randomUUID(), branch, "CB-101", "Cálculo Diferencial", true, Instant.now());
 
-        when(subjectRepository.findByBranchIdAndActiveTrueOrderByNameAsc(branchId)).thenReturn(List.of(subj));
+        when(subjectRepository.findByBranchIdAndActiveTrueAndBranchActiveTrueOrderByNameAsc(branchId))
+                .thenReturn(List.of(subj));
+        when(branchRepository.findAllByOrderByNameAsc()).thenReturn(List.of(branch));
+        when(subjectRepository.findAllByOrderByNameAsc()).thenReturn(List.of(subj));
 
         List<SubjectResponseDto> result = catalogService.listPublicSubjects(branchId);
-
         assertThat(result).hasSize(1);
         assertThat(result.get(0).code()).isEqualTo("CB-101");
+
+        assertThat(catalogService.listAllBranches()).hasSize(1);
+        assertThat(catalogService.listAllSubjects(null)).hasSize(1);
     }
 }
