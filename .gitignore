@@ -1,0 +1,110 @@
+# =====================================================================
+# 1. VARIABLES DE ENTORNO, SECRETOS Y CERTIFICADOS
+# =====================================================================
+.env
+.env.*
+!.env.example
+backend/.env
+backend/.env.*
+!backend/.env.example
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+**/application-local.yml
+**/application-local.properties
+**/application-secret*.yml
+**/application-secret*.properties
+*.pem
+*.key
+*.p12
+*.jks
+*.pfx
+*.crt
+secrets.*
+credentials.json
+service-account*.json
+
+# =====================================================================
+# 2. ARCHIVOS SUBIDOS POR USUARIOS Y VOLUMENES DE BASE DE DATOS
+# =====================================================================
+uploads/
+backend/uploads/
+**/uploads/*
+!**/uploads/.gitkeep
+pgdata/
+postgres-data/
+docker-data/
+*.db
+*.sqlite
+*.sqlite3
+*.dump
+*.sql.gz
+*.bak
+
+# =====================================================================
+# 3. BACKEND (JAVA / MAVEN / SPRING BOOT)
+# =====================================================================
+target/
+**/target/
+*.class
+*.jar
+*.war
+*.ear
+*.nar
+!**/wrapper/maven-wrapper.jar
+.mvn/timing.properties
+hs_err_pid*
+replay_pid*
+spring.log*
+
+# =====================================================================
+# 4. FRONTEND (NODE / VITE / REACT / TYPESCRIPT)
+# =====================================================================
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+dist-ssr/
+build/
+.vite/
+**/.vite/
+.eslintcache
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnpm-store/
+
+# =====================================================================
+# 5. IDES, EDITORES Y SISTEMA OPERATIVO
+# =====================================================================
+.idea/
+*.iws
+*.iml
+*.ipr
+.vscode/
+!.vscode/extensions.json
+.settings/
+.project
+.classpath
+.factorypath
+.sts4-cache/
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# =====================================================================
+# 6. LOGS, REPORTES DE PRUEBAS Y TEMPORALES
+# =====================================================================
+logs/
+**/logs/
+*.log
+coverage/
+**/coverage/
+.nyc_output/
+tmp/
+temp/
+*.swp
+*.swo
+*~
