@@ -411,7 +411,7 @@ erDiagram
    - `pom.xml`: Java 21, Spring Boot 3.3+, `spring-boot-starter-web`, `spring-boot-starter-data-jpa`, `spring-boot-starter-security`, `spring-boot-starter-validation`, `spring-boot-starter-mail`, `flyway-core`, `flyway-database-postgresql`, `postgresql`, `jjwt-api/impl/jackson` (0.12.x), `springdoc-openapi-starter-webmvc-ui` (2.6.x), `cloudinary-http44`, `lombok`.
    - `src/main/resources/application.yml`: Configuración estrictamente parametrizada con variables de entorno (`${DB_URL}`, `${POSTGRES_USER}`, `${POSTGRES_PASSWORD}`, `${JWT_SECRET}`, etc.).
    - `src/main/resources/db/migration/V1__init_schema.sql`: Creación de todas las tablas del diagrama ER (`users`, `roles`, `user_roles`, `password_reset_tokens`, `subject_branches`, `subjects`, `tutor_profiles`, `tutor_initial_subjects`, `tutoring_offers`, `offer_discount_tiers`, `offer_moderation_reports`, `availability_slots`, `study_groups`, `study_group_members`, `bookings`, `booking_slots`, `reviews`, `notifications`, `audit_logs`) con sus llaves foráneas, `CHECK` constraints (`gpa_reported >= 4.00 AND gpa_reported <= 5.00`, `score BETWEEN 1 AND 5`) e índices.
-   - `src/main/resources/db/migration/V2__seed_initial_data.sql`: Inserción de roles (`ROLE_STUDENT`, `ROLE_TUTOR`, `ROLE_SUPERVISOR`, `ROLE_ADMIN`), 4 ramas iniciales y 12 materias base. (La creación del usuario `ADMIN` y `SUPERVISOR` inicial se hará mediante un `ApplicationRunner` que lea `ADMIN_INITIAL_EMAIL` / `ADMIN_INITIAL_PASSWORD` desde variables de entorno para no exponer contraseñas en SQL).
+   - `src/main/resources/db/migration/V2__seed_catalog_and_roles.sql`: Inserción de roles (`ROLE_STUDENT`, `ROLE_TUTOR`, `ROLE_SUPERVISOR`, `ROLE_ADMIN`), 4 ramas iniciales y 12 materias base. (La creación del usuario `ADMIN` y `SUPERVISOR` inicial se hará mediante un `ApplicationRunner` que lea `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` y `SEED_SUPERVISOR_EMAIL` / `SEED_SUPERVISOR_PASSWORD` desde variables de entorno para no exponer contraseñas en SQL).
 3. **Módulo Common (`com.polink.common`):**
    - `config/OpenApiSwaggerConfig.java`: Configuración de `OpenAPI` con esquema `SecurityScheme` tipo HTTP Bearer JWT.
    - `config/AsyncConfig.java`: `@EnableAsync` con `ThreadPoolTaskExecutor` para envío de correos sin bloquear hilos HTTP.
@@ -488,14 +488,15 @@ erDiagram
    - `repository/SubjectBranchRepository.java`, `SubjectRepository.java`.
    - `dto/BranchRequestDto.java`, `BranchResponseDto.java`, `SubjectRequestDto.java`, `SubjectResponseDto.java`.
    - `service/CatalogService.java`: Listado de ramas y materias activas para selectores; creación/edición/desactivación por `ROLE_ADMIN` registrando cada cambio en `AuditLogService`.
-   - `controller/CatalogController.java`:
+   - `controller/CatalogController.java` y `AdminCatalogController.java`:
      - `GET /api/v1/catalog/branches` y `GET /api/v1/catalog/subjects` (Públicos).
+     - `GET /api/v1/admin/catalog/branches` y `GET /api/v1/admin/catalog/subjects` (`ROLE_ADMIN`).
      - `POST /api/v1/admin/catalog/branches`, `PUT /api/v1/admin/catalog/branches/{id}` (`ROLE_ADMIN`).
      - `POST /api/v1/admin/catalog/subjects`, `PUT /api/v1/admin/catalog/subjects/{id}` (`ROLE_ADMIN`).
 5. **Pruebas Unitarias de Fase 2 (`backend/src/test/java/com/polink/`):**
-   - `common/security/JwtServiceTest.java`: Generación, extracción de claims y rechazo de tokens expirados o alterados.
-   - `auth/service/AuthServiceTest.java` y `auth/controller/AuthControllerTest.java`: Login exitoso, rechazo de cuenta `SUSPENDED`, registro de estudiante duplicado (`409`), emisión y consumo de token de recuperación de contraseña (incluyendo expirado/usado).
-   - `user/service/UserServiceTest.java` y `catalog/service/CatalogServiceTest.java`: Creación de supervisores, cambio de estado de cuenta y CRUD de ramas/materias verificando invocación a `AuditLogService`.
+   - `common/security/JwtServiceTest.java`, `JwtAuthenticationFilterTest.java` y `CustomUserDetailsServiceTest.java`: Generación, extracción de claims, rechazo de tokens expirados o alterados y bloqueo inmediato de usuarios `SUSPENDED` en filtro JWT.
+   - `auth/service/AuthServiceTest.java` y `auth/controller/AuthControllerTest.java`: Login exitoso, rechazo de cuenta `SUSPENDED`, registro de estudiante duplicado (`409`), emisión y consumo de token de recuperación con hash SHA-256 (sin filtrar token en notificaciones In-App).
+   - `user/service/UserServiceTest.java`, `InitialStaffSeedRunnerTest.java`, `user/controller/UserControllerTest.java`, `catalog/service/CatalogServiceTest.java` y `catalog/controller/CatalogControllerTest.java`: Creación de supervisores, cambio de estado de cuenta, semilla idempotente y CRUD completo de ramas/materias verificando invocación a `AuditLogService`.
 
 #### Criterios de Aceptación (Definition of Done - Fase 2)
 - Login, registro de estudiante y recuperación de contraseña (verificable en Mailpit `:8025`) funcionan de extremo a extremo.

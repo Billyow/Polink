@@ -37,8 +37,25 @@ public class CatalogService {
     @Transactional(readOnly = true)
     public List<SubjectResponseDto> listPublicSubjects(UUID branchId) {
         List<SubjectEntity> subjects = (branchId == null)
-                ? subjectRepository.findByActiveTrueOrderByNameAsc()
-                : subjectRepository.findByBranchIdAndActiveTrueOrderByNameAsc(branchId);
+                ? subjectRepository.findByActiveTrueAndBranchActiveTrueOrderByNameAsc()
+                : subjectRepository.findByBranchIdAndActiveTrueAndBranchActiveTrueOrderByNameAsc(branchId);
+        return subjects.stream()
+                .map(SubjectResponseDto::fromEntity)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<BranchResponseDto> listAllBranches() {
+        return branchRepository.findAllByOrderByNameAsc().stream()
+                .map(BranchResponseDto::fromEntity)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<SubjectResponseDto> listAllSubjects(UUID branchId) {
+        List<SubjectEntity> subjects = (branchId == null)
+                ? subjectRepository.findAllByOrderByNameAsc()
+                : subjectRepository.findByBranchIdOrderByNameAsc(branchId);
         return subjects.stream()
                 .map(SubjectResponseDto::fromEntity)
                 .toList();

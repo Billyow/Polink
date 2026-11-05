@@ -18,13 +18,16 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -36,6 +39,26 @@ import java.util.UUID;
 public class AdminCatalogController {
 
     private final CatalogService catalogService;
+
+    @GetMapping("/branches")
+    @Operation(summary = "Listar todas las ramas académicas (activas e inactivas)", description = "Retorna el listado completo de ramas académicas para administración.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Ramas obtenidas correctamente")
+    })
+    public ResponseEntity<List<BranchResponseDto>> listAllBranches() {
+        return ResponseEntity.ok(catalogService.listAllBranches());
+    }
+
+    @GetMapping("/subjects")
+    @Operation(summary = "Listar todas las asignaturas (activas e inactivas)", description = "Retorna todas las asignaturas del catálogo para administración, permitiendo filtrar opcionalmente por rama.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Asignaturas obtenidas correctamente")
+    })
+    public ResponseEntity<List<SubjectResponseDto>> listAllSubjects(
+            @RequestParam(required = false) UUID branchId
+    ) {
+        return ResponseEntity.ok(catalogService.listAllSubjects(branchId));
+    }
 
     @PostMapping("/branches")
     @Operation(summary = "Crear rama académica", description = "Crea una nueva rama en el catálogo y registra la acción en audit_logs.")

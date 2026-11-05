@@ -229,7 +229,7 @@ Este documento define el contrato vivo de los endpoints REST del backend de **Po
 
 ### 6.2 Listar asignaturas activas
 - **Método y Ruta:** `GET /api/v1/catalog/subjects`
-- **Roles Permitidos:** Público
+- **Roles Permitidos:** Público (solo retorna asignaturas activas cuya rama también esté activa)
 - **Query Params:** `branchId` (opcional, `UUID`)
 - **Respuesta Exitosa (`200 OK`):**
 ```json
@@ -246,7 +246,18 @@ Este documento define el contrato vivo de los endpoints REST del backend de **Po
 ]
 ```
 
-### 6.3 Crear rama académica
+### 6.3 Listar todas las ramas académicas (Administración, activas e inactivas)
+- **Método y Ruta:** `GET /api/v1/admin/catalog/branches`
+- **Roles Permitidos:** `ROLE_ADMIN`
+- **Respuesta Exitosa (`200 OK`):** `List<BranchResponseDto>`
+
+### 6.4 Listar todas las asignaturas (Administración, activas e inactivas)
+- **Método y Ruta:** `GET /api/v1/admin/catalog/subjects`
+- **Roles Permitidos:** `ROLE_ADMIN`
+- **Query Params:** `branchId` (opcional, `UUID`)
+- **Respuesta Exitosa (`200 OK`):** `List<SubjectResponseDto>`
+
+### 6.5 Crear rama académica
 - **Método y Ruta:** `POST /api/v1/admin/catalog/branches`
 - **Roles Permitidos:** `ROLE_ADMIN`
 - **Request Body (`BranchRequestDto`):**
@@ -259,13 +270,13 @@ Este documento define el contrato vivo de los endpoints REST del backend de **Po
 ```
 - **Respuesta Exitosa (`201 Created`):** `BranchResponseDto`
 
-### 6.4 Actualizar rama académica
+### 6.6 Actualizar rama académica
 - **Método y Ruta:** `PUT /api/v1/admin/catalog/branches/{id}`
 - **Roles Permitidos:** `ROLE_ADMIN`
 - **Request Body (`BranchRequestDto`)**
 - **Respuesta Exitosa (`200 OK`):** `BranchResponseDto`
 
-### 6.5 Crear asignatura
+### 6.7 Crear asignatura
 - **Método y Ruta:** `POST /api/v1/admin/catalog/subjects`
 - **Roles Permitidos:** `ROLE_ADMIN`
 - **Request Body (`SubjectRequestDto`):**
@@ -279,7 +290,7 @@ Este documento define el contrato vivo de los endpoints REST del backend de **Po
 ```
 - **Respuesta Exitosa (`201 Created`):** `SubjectResponseDto`
 
-### 6.6 Actualizar asignatura
+### 6.8 Actualizar asignatura
 - **Método y Ruta:** `PUT /api/v1/admin/catalog/subjects/{id}`
 - **Roles Permitidos:** `ROLE_ADMIN`
 - **Request Body (`SubjectRequestDto`)**

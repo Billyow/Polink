@@ -11,11 +11,13 @@ import java.util.UUID;
 @Repository
 public interface SubjectRepository extends JpaRepository<SubjectEntity, UUID> {
 
-    List<SubjectEntity> findByActiveTrueOrderByNameAsc();
+    List<SubjectEntity> findByActiveTrueAndBranchActiveTrueOrderByNameAsc();
 
-    List<SubjectEntity> findByBranchIdAndActiveTrueOrderByNameAsc(UUID branchId);
+    List<SubjectEntity> findByBranchIdAndActiveTrueAndBranchActiveTrueOrderByNameAsc(UUID branchId);
 
     List<SubjectEntity> findAllByOrderByNameAsc();
+
+    List<SubjectEntity> findByBranchIdOrderByNameAsc(UUID branchId);
 
     boolean existsByCodeIgnoreCase(String code);
 
