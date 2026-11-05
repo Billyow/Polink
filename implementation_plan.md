@@ -380,6 +380,9 @@ erDiagram
 > 3. **Cero Comentarios Triviales:** No escribir comentarios en el código salvo en bloques de lógica transaccional o algorítmica muy pesada.
 > 4. **Actualización de `API_CONTRACT.md`:** Cada agente que cree o modifique un endpoint **debe** documentarlo inmediatamente en `/API_CONTRACT.md` (Método, Ruta, Rol requerido, Request JSON/Multipart, Response JSON, Códigos de estado).
 > 5. **Swagger / OpenAPI 3:** Todo `Controller` y `DTO` debe incluir anotaciones de `io.swagger.v3.oas.annotations` (`@Tag`, `@Operation`, `@ApiResponses`, `@SecurityRequirement(name = "bearerAuth")`, `@Schema`).
+> 6. **Pruebas Unitarias y Verificación Funcional Obligatoria en Cada Fase:**
+>    - Cada agente debe implementar pruebas unitarias (`JUnit 5` + `Mockito` + `MockMvc` en `backend/src/test/java/com/polink/<modulo>/` y `Vitest` + `React Testing Library` en Frontend) cubriendo casos de éxito, validaciones de negocio y manejo de excepciones para todos los servicios, validadores y controladores de su fase.
+>    - Ninguna fase se considera terminada hasta que `./mvnw test` (o `npm test`) finalice con **0 fallos y 0 errores** (`BUILD SUCCESS`).
 
 ---
 
@@ -387,7 +390,7 @@ erDiagram
 
 - **Responsable:** Agente 1 (Seguridad Inicial, Infraestructura y Core Backend)
 - **Dependencias previas:** Ninguna.
-- **Objetivo:** Ejecutar **como primer paso absoluto** la creación de `.gitignore`, las variables de entorno (`.env.example` / `.env`) y la actualización de `README.md`; posteriormente dejar operativo el esqueleto del proyecto (`backend/`, `frontend/`, `docker-compose.yml`, `API_CONTRACT.md`), las migraciones Flyway completas, el manejo global de errores, Swagger UI, almacenamiento de archivos (`StorageService`), registro de auditoría (`audit`) y sistema de notificaciones (`notification`).
+- **Objetivo:** Ejecutar **como primer paso absoluto** la creación de `.gitignore`, las variables de entorno (`.env.example` / `.env`) y la actualización de `README.md`; posteriormente dejar operativo el esqueleto del proyecto (`backend/`, `frontend/`, `docker-compose.yml`, `API_CONTRACT.md`), las migraciones Flyway completas, el manejo global de errores, Swagger UI, almacenamiento de archivos (`StorageService`), registro de auditoría (`audit`), sistema de notificaciones (`notification`) y su batería de pruebas unitarias.
 
 #### Archivos y Capas a Implementar
 0. **Paso 0 (Prioridad Inicial Absoluta — Seguridad, `.gitignore`, Variables de Entorno y `README.md`):**
@@ -430,12 +433,18 @@ erDiagram
      - `GET /api/v1/notifications` (Autenticado, paginado).
      - `GET /api/v1/notifications/unread-count` (Autenticado, usado por el polling ligero cada 45-60s).
      - `PATCH /api/v1/notifications/{id}/read` y `PATCH /api/v1/notifications/read-all`.
+6. **Pruebas Unitarias y de Integración de Fase 1 (`backend/src/test/java/com/polink/`):**
+   - `PolinkApplicationTests.java`: Prueba de carga de contexto y ejecución de migraciones Flyway `V1` y `V2` contra PostgreSQL.
+   - `common/storage/ImageValidationHelperTest.java` y `common/storage/LocalFileStorageServiceTest.java`: Validación de MIME types (`jpeg`, `png`, `webp`), rechazo de archivos vacíos o $> 5\text{ MB}$ y almacenamiento seguro en disco con `@TempDir`.
+   - `common/exception/GlobalExceptionHandlerTest.java`: Verificación de mapeo de excepciones de dominio, validación, tamaño de archivo y acceso denegado a `ApiErrorResponse`.
+   - `audit/service/AuditLogServiceTest.java` y `audit/controller/AuditLogControllerTest.java`: Pruebas unitarias de registro inmutable, filtrado paginado y control de acceso `ROLE_ADMIN`.
+   - `notification/service/NotificationServiceTest.java`, `notification/service/EmailNotificationSenderTest.java` y `notification/controller/NotificationControllerTest.java`: Pruebas unitarias de creación de notificación + disparo de correo `@Async`, conteo de no leídas (`unread-count`), marcado individual (incluyendo `404` cuando no pertenece al usuario) y marcado masivo.
 
 #### Criterios de Aceptación (Definition of Done - Fase 1)
 - `.gitignore` bloquea efectivamente archivos `.env`, `target/`, `node_modules/`, `uploads/` y archivos de IDE (`git status --ignored` validado).
 - `.env.example`, `frontend/.env.example` y `README.md` están completos y actualizados sin ningún secreto real expuesto.
 - `docker compose up -d` levanta PostgreSQL y Mailpit leyendo variables desde `.env`.
-- `mvn clean compile` y arranque de Spring Boot ejecutan `V1` y `V2` de Flyway limpiamente.
+- `./mvnw test` ejecuta exitosamente las migraciones `V1` y `V2` de Flyway y pasa el 100% de los tests unitarios y de integración de la Fase 1.
 - `/swagger-ui.html` carga correctamente y `API_CONTRACT.md` contiene los endpoints de `audit` y `notification`.
 
 ---
@@ -444,7 +453,7 @@ erDiagram
 
 - **Responsable:** Agente 2 (Seguridad, Identidad y Catálogo)
 - **Dependencias previas:** Fase 1 completada.
-- **Objetivo:** Implementar la capa de seguridad con JWT, flujos de login, recuperación de contraseña, registro de Estudiante, gestión administrativa de usuarios/supervisores (`user`) y gestión del catálogo cerrado de Ramas y Materias (`catalog`).
+- **Objetivo:** Implementar la capa de seguridad con JWT, flujos de login, recuperación de contraseña, registro de Estudiante, gestión administrativa de usuarios/supervisores (`user`), gestión del catálogo cerrado de Ramas y Materias (`catalog`) y sus pruebas unitarias.
 
 #### Archivos y Capas a Implementar
 1. **Seguridad Base (`com.polink.common.security`):**
@@ -483,10 +492,15 @@ erDiagram
      - `GET /api/v1/catalog/branches` y `GET /api/v1/catalog/subjects` (Públicos).
      - `POST /api/v1/admin/catalog/branches`, `PUT /api/v1/admin/catalog/branches/{id}` (`ROLE_ADMIN`).
      - `POST /api/v1/admin/catalog/subjects`, `PUT /api/v1/admin/catalog/subjects/{id}` (`ROLE_ADMIN`).
+5. **Pruebas Unitarias de Fase 2 (`backend/src/test/java/com/polink/`):**
+   - `common/security/JwtServiceTest.java`: Generación, extracción de claims y rechazo de tokens expirados o alterados.
+   - `auth/service/AuthServiceTest.java` y `auth/controller/AuthControllerTest.java`: Login exitoso, rechazo de cuenta `SUSPENDED`, registro de estudiante duplicado (`409`), emisión y consumo de token de recuperación de contraseña (incluyendo expirado/usado).
+   - `user/service/UserServiceTest.java` y `catalog/service/CatalogServiceTest.java`: Creación de supervisores, cambio de estado de cuenta y CRUD de ramas/materias verificando invocación a `AuditLogService`.
 
 #### Criterios de Aceptación (Definition of Done - Fase 2)
 - Login, registro de estudiante y recuperación de contraseña (verificable en Mailpit `:8025`) funcionan de extremo a extremo.
 - `ADMIN` puede gestionar Ramas, Materias y Supervisores, dejando traza en `audit_logs`.
+- `./mvnw test` pasa el 100% de las pruebas unitarias de `security`, `auth`, `user` y `catalog`.
 - Todos los endpoints de `auth`, `user` y `catalog` están documentados en Swagger y en `API_CONTRACT.md`.
 
 ---
@@ -495,7 +509,7 @@ erDiagram
 
 - **Responsable:** Agente 3 (Dominio de Asesores, Ofertas y Supervisión)
 - **Dependencias previas:** Fases 1 y 2 completadas.
-- **Objetivo:** Implementar el registro y postulación de Asesores (con validación de promedio $\ge 4.0$, materias iniciales e imagen), la bandeja de aprobación de asesores para el `SUPERVISOR`, la creación de solicitudes de ofertas de asesoría (con tramos de descuento), la aprobación/rechazo/baja con reporte por parte del `SUPERVISOR`, y el motor de búsqueda `ILIKE`.
+- **Objetivo:** Implementar el registro y postulación de Asesores (con validación de promedio $\ge 4.0$, materias iniciales e imagen), la bandeja de aprobación de asesores para el `SUPERVISOR`, la creación de solicitudes de ofertas de asesoría (con tramos de descuento), la aprobación/rechazo/baja con reporte por parte del `SUPERVISOR`, el motor de búsqueda `ILIKE` y sus pruebas unitarias.
 
 #### Archivos y Capas a Implementar
 1. **Módulo Tutor (`com.polink.tutor`):**
@@ -529,11 +543,15 @@ erDiagram
      - `GET /api/v1/supervisor/offerings` (`ROLE_SUPERVISOR`, filtrable por `PENDING_APPROVAL` o `APPROVED`).
      - `PATCH /api/v1/supervisor/offerings/{id}/review` (`ROLE_SUPERVISOR`).
      - `POST /api/v1/supervisor/offerings/{id}/deactivate` (`ROLE_SUPERVISOR`).
+3. **Pruebas Unitarias de Fase 3 (`backend/src/test/java/com/polink/`):**
+   - `tutor/service/TutorOnboardingServiceTest.java`: Rechazo de promedio $< 4.0$, exigencia de al menos una materia del catálogo, asignación de `ROLE_TUTOR` al aprobar y obligatoriedad de motivo al rechazar.
+   - `offering/service/OfferingServiceTest.java`: Creación de oferta con tramos de descuento válidos/inválidos, aprobación/rechazo por supervisor, baja de oferta activa generando reporte obligatorio y búsqueda por palabra clave.
 
 #### Criterios de Aceptación (Definition of Done - Fase 3)
 - Un asesor puede registrarse subiendo su certificado de promedio $\ge 4.0$, un supervisor lo aprueba y el usuario obtiene `ROLE_TUTOR`.
 - El asesor crea una solicitud de oferta con imagen y descuentos grupales; el supervisor puede aprobarla, rechazarla con motivo o darla de baja con reporte, disparando notificaciones In-App y correo.
 - El endpoint de búsqueda `GET /api/v1/offerings/search?keyword=...` retorna únicamente ofertas `APPROVED` que coincidan por `ILIKE` en temas o materia.
+- `./mvnw test` pasa el 100% de las pruebas unitarias de `tutor` y `offering`.
 - Swagger y `API_CONTRACT.md` actualizados con todos los endpoints de `tutor` y `offering`.
 
 ---
@@ -542,7 +560,7 @@ erDiagram
 
 - **Responsable:** Agente 4 (Agendamiento, Grupos y Calificaciones)
 - **Dependencias previas:** Fases 1, 2 y 3 completadas.
-- **Objetivo:** Implementar el calendario global de disponibilidad del asesor en bloques de 1 hora, la gestión de grupos de estudio entre estudiantes, el flujo transaccional de reserva (con cálculo de descuento grupal, bloqueo de calendario al aceptar y rechazo automático de solapamientos), la finalización manual y la evaluación anónima de 1 a 5 estrellas.
+- **Objetivo:** Implementar el calendario global de disponibilidad del asesor en bloques de 1 hora, la gestión de grupos de estudio entre estudiantes, el flujo transaccional de reserva (con cálculo de descuento grupal, bloqueo de calendario al aceptar y rechazo automático de solapamientos), la finalización manual, la evaluación anónima de 1 a 5 estrellas y sus pruebas unitarias.
 
 #### Archivos y Capas a Implementar
 1. **Módulo Availability (`com.polink.availability`):**
@@ -590,11 +608,17 @@ erDiagram
    - `controller/ReviewController.java`:
      - `POST /api/v1/bookings/{bookingId}/reviews` (`ROLE_STUDENT`).
      - `GET /api/v1/tutors/{tutorProfileId}/reviews` (Público / Autenticado).
+5. **Pruebas Unitarias de Fase 4 (`backend/src/test/java/com/polink/`):**
+   - `availability/service/AvailabilityServiceTest.java`: Generación de bloques de 1h con repetición semanal e impedimento de borrar un slot `BOOKED`.
+   - `studygroup/service/StudyGroupServiceTest.java`: Creación de grupo, código de invitación y unión de miembros.
+   - `booking/service/BookingServiceTest.java`: Cálculo exacto de precio grupal con descuento por tramos, bloqueo de slots al aceptar una reserva de varias horas, rechazo en cascada de solicitudes `PENDING` solapadas y transición manual a `COMPLETED`.
+   - `review/service/ReviewServiceTest.java`: Rechazo de evaluación si la reserva no está `COMPLETED`, enmascaramiento de autor cuando `isAnonymous == true`, prevención de doble evaluación y recálculo de `ratingAvg`.
 
 #### Criterios de Aceptación (Definition of Done - Fase 4)
 - Al aceptar una reserva de 1 o varias horas, los bloques del calendario del asesor pasan a `BOOKED` y cualquier otra solicitud `PENDING` solapada se rechaza automáticamente.
 - Las reservas con `studyGroupId` aplican automáticamente el descuento por tramo configurado en la oferta.
 - Solo tras invocar `PATCH /api/v1/tutor/bookings/{id}/complete` los estudiantes pueden enviar su calificación de 1 a 5 estrellas, anónima por defecto.
+- `./mvnw test` pasa el 100% de la suite de pruebas del backend completo.
 - Swagger y `API_CONTRACT.md` contienen el 100% de los endpoints del backend.
 
 ---
@@ -603,7 +627,7 @@ erDiagram
 
 - **Responsable:** Agente 5 (Frontend Core & Experiencia del Estudiante)
 - **Dependencias previas:** `API_CONTRACT.md` y Fases 1–4 operativas.
-- **Objetivo:** Construir la base del proyecto React + Vite + TypeScript + TailwindCSS encarpetado por funcionalidades y capas internas, incluyendo autenticación, recuperación de contraseña, campana de notificaciones con Polling inteligente (cada 45s) y todos los flujos del rol Estudiante (buscador por palabras clave, reserva de 1..N horas, grupos de estudio y evaluación 1–5 estrellas).
+- **Objetivo:** Construir la base del proyecto React + Vite + TypeScript + TailwindCSS encarpetado por funcionalidades y capas internas, incluyendo autenticación, recuperación de contraseña, campana de notificaciones con Polling inteligente (cada 45s), todos los flujos del rol Estudiante (buscador por palabras clave, reserva de 1..N horas, grupos de estudio y evaluación 1–5 estrellas) y sus pruebas unitarias en Vitest.
 
 #### Archivos y Capas a Implementar (`frontend/src/`)
 1. **Capa Core (`src/core/`):**
@@ -622,9 +646,11 @@ erDiagram
 5. **Feature Bookings & Reviews - Estudiante (`src/features/bookings/` y `src/features/reviews/`):**
    - `pages/StudentBookingsPage.tsx`: Listado de reservas del estudiante con su estado (`PENDING`, `ACCEPTED`, `REJECTED`, `COMPLETED`).
    - `components/RateBookingModal.tsx`: Visible únicamente en reservas `COMPLETED` aún no calificadas por el estudiante; selector de 1 a 5 estrellas y checkbox *"Publicar calificación de forma anónima"* marcado como `true` por defecto.
+6. **Pruebas Unitarias Frontend Fase 5 (`Vitest` + `React Testing Library`):**
+   - Tests unitarios para `NotificationPollingContext` (verificando pausa en `visibilityState === 'hidden'`), `TutorRegisterPage` (validación de promedio $\ge 4.0$ y selección de materia), cálculo de previsualización de descuento grupal en `OfferingDetailPage` y `RateBookingModal` (anonimato por defecto en `true`).
 
 #### Criterios de Aceptación (Definition of Done - Fase 5)
-- `npm run build` compila sin errores de TypeScript (`tsc --noEmit`).
+- `npm run build` compila sin errores de TypeScript (`tsc --noEmit`) y `npm test` pasa todos los tests unitarios de la Fase 5.
 - Registro de estudiante, registro de asesor, login, recuperación de contraseña, búsqueda por palabras clave, creación de grupos de estudio, agendamiento de múltiples horas y evaluación anónima de 1 a 5 funcionan contra el backend real.
 
 ---
@@ -633,7 +659,7 @@ erDiagram
 
 - **Responsable:** Agente 6 (Frontend Paneles de Asesor, Moderación y Administración)
 - **Dependencias previas:** Fase 5 (Core Frontend) y Fases 1–4 del Backend completadas.
-- **Objetivo:** Implementar las funcionalidades de React para el **Asesor** (calendario de disponibilidad, creación de solicitudes de oferta con descuentos, gestión y finalización de reservas), **Supervisor** (revisión de registros de asesores, aprobación/rechazo de solicitudes de ofertas y baja de ofertas activas con reporte) y **Admin** (gestión de catálogo de ramas/materias, supervisores, usuarios y visor de auditoría).
+- **Objetivo:** Implementar las funcionalidades de React para el **Asesor** (calendario de disponibilidad, creación de solicitudes de oferta con descuentos, gestión y finalización de reservas), **Supervisor** (revisión de registros de asesores, aprobación/rechazo de solicitudes de ofertas y baja de ofertas activas con reporte), **Admin** (gestión de catálogo de ramas/materias, supervisores, usuarios y visor de auditoría) y sus pruebas unitarias.
 
 #### Archivos y Capas a Implementar (`frontend/src/features/`)
 1. **Feature Availability (`src/features/availability/{pages,components,services,hooks,types}`):**
@@ -649,8 +675,11 @@ erDiagram
    - `pages/AdminCatalogPage.tsx`: CRUD de Ramas (`subject_branches`) y Materias (`subjects`) vinculadas a cada rama.
    - `pages/AdminUsersPage.tsx`: Creación de nuevas cuentas de `SUPERVISOR` y activación/suspensión de cuentas de usuario con motivo obligatorio.
    - `pages/AdminAuditLogsPage.tsx`: Tabla paginada de solo lectura con el historial inmutable de acciones de Administradores y Supervisores.
+5. **Pruebas Unitarias Frontend Fase 6 (`Vitest` + `React Testing Library`):**
+   - Tests unitarios para `CreateOfferingModal` (validación de tramos de descuento e imagen obligatoria), modales de `Supervisor` (exigencia de motivo/reporte obligatorio antes de rechazar o dar de baja) y `AdminCatalogPage`.
 
 #### Criterios de Aceptación (Definition of Done - Fase 6)
+- `npm test` y `npm run build` pasan sin errores en todo el frontend.
 - Los 4 roles (`STUDENT`, `TUTOR`, `SUPERVISOR`, `ADMIN`) cuentan con todas sus vistas navegables y protegidas por rol en React.
 - Todo el flujo de negocio (registro de asesor -> aprobación por supervisor -> creación de oferta con descuentos -> aprobación de oferta -> configuración de calendario -> creación de grupo de estudio -> reserva de horas -> aceptación y bloqueo de calendario -> finalización manual -> calificación anónima 1-5 -> baja de oferta con reporte) se ejecuta de principio a fin sin errores.
 
