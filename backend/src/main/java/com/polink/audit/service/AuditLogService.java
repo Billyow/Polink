@@ -6,7 +6,6 @@ import com.polink.audit.repository.AuditLogRepository;
 import com.polink.common.dto.PagedResponseDto;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -50,7 +49,7 @@ public class AuditLogService {
     ) {
         String normalizedAction = (actionType == null || actionType.isBlank()) ? null : actionType.trim();
         Page<AuditLogResponseDto> resultPage = auditLogRepository
-                .findFiltered(normalizedAction, actorUserId, PageRequest.of(page, size))
+                .findFiltered(normalizedAction, actorUserId, PagedResponseDto.pageRequest(page, size))
                 .map(AuditLogResponseDto::fromEntity);
         return PagedResponseDto.from(resultPage);
     }

@@ -25,9 +25,13 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HashSet;
+import java.util.HexFormat;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -112,11 +116,12 @@ public class AuthService {
 
             String rawToken = UUID.randomUUID().toString().replace("-", "")
                     + UUID.randomUUID().toString().replace("-", "");
+            String hashedToken = hashToken(rawToken);
             Instant now = Instant.now();
             PasswordResetTokenEntity tokenEntity = PasswordResetTokenEntity.builder()
                     .id(UUID.randomUUID())
                     .userId(user.getId())
-                    .token(rawToken)
+                    .token(hashedToken)
                     .expiresAt(now.plus(Duration.ofMinutes(resetExpirationMinutes)))
                     .used(false)
                     .createdAt(now)
@@ -124,10 +129,11 @@ public class AuthService {
             passwordResetTokenRepository.save(tokenEntity);
 
             String resetUrl = frontendBaseUrl + "/reset-password?token=" + rawToken;
-            notificationService.notifyUser(
+            notificationService.notifyUserWithSeparateEmailBody(
                     user.getId(),
                     user.getEmail(),
                     "Recuperación de contraseña",
+                    "Se ha enviado a tu correo electrónico un enlace temporal para restablecer tu contraseña.",
                     "Has solicitado restablecer tu contraseña. Usa el siguiente enlace o token (válido por "
                             + resetExpirationMinutes + " minutos): " + resetUrl,
                     "PASSWORD_RESET_REQUESTED",
@@ -142,8 +148,9 @@ public class AuthService {
 
     @Transactional
     public MessageResponseDto resetPassword(ResetPasswordRequestDto request) {
+        String hashedToken = hashToken(request.token().trim());
         PasswordResetTokenEntity tokenEntity = passwordResetTokenRepository
-                .findByTokenAndUsedFalse(request.token().trim())
+                .findByTokenAndUsedFalse(hashedToken)
                 .orElseThrow(() -> new DomainException("Token de recuperación inválido o ya utilizado"));
 
         if (tokenEntity.getExpiresAt().isBefore(Instant.now())) {
@@ -154,6 +161,12 @@ public class AuthService {
 
         UserEntity user = userRepository.findById(tokenEntity.getUserId())
                 .orElseThrow(() -> new ResourceNotFoundException("Usuario asociado al token no encontrado"));
+
+        if (!"ACTIVE".equalsIgnoreCase(user.getStatus())) {
+            tokenEntity.setUsed(true);
+            passwordResetTokenRepository.save(tokenEntity);
+            throw new DomainException("La cuenta se encuentra suspendida", HttpStatus.FORBIDDEN);
+        }
 
         user.setPasswordHash(passwordEncoder.encode(request.newPassword()));
         user.setUpdatedAt(Instant.now());
@@ -172,6 +185,16 @@ public class AuthService {
         );
 
         return new MessageResponseDto("Tu contraseña ha sido restablecida exitosamente");
+    }
+
+    public static String hashToken(String rawToken) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hashedBytes = digest.digest(rawToken.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(hashedBytes);
+        } catch (NoSuchAlgorithmException ex) {
+            throw new IllegalStateException("Algoritmo SHA-256 no disponible", ex);
+        }
     }
 
     private AuthResponseDto buildAuthResponse(UserEntity user) {

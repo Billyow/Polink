@@ -8,7 +8,6 @@ import com.polink.notification.entity.NotificationEntity;
 import com.polink.notification.repository.NotificationRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,25 +30,46 @@ public class NotificationService {
             String type,
             UUID referenceId
     ) {
+        return notifyUserWithSeparateEmailBody(
+                recipientUserId,
+                recipientEmail,
+                title,
+                message,
+                message,
+                type,
+                referenceId
+        );
+    }
+
+    @Transactional
+    public NotificationResponseDto notifyUserWithSeparateEmailBody(
+            UUID recipientUserId,
+            String recipientEmail,
+            String title,
+            String inAppMessage,
+            String emailBody,
+            String type,
+            UUID referenceId
+    ) {
         NotificationEntity entity = NotificationEntity.builder()
                 .id(UUID.randomUUID())
                 .recipientUserId(recipientUserId)
                 .title(title)
-                .message(message)
+                .message(inAppMessage)
                 .type(type)
                 .referenceId(referenceId)
                 .read(false)
                 .createdAt(Instant.now())
                 .build();
         NotificationEntity saved = notificationRepository.save(entity);
-        emailNotificationSender.sendEmailAsync(recipientEmail, "[Polink] " + title, message);
+        emailNotificationSender.sendEmailAsync(recipientEmail, "[Polink] " + title, emailBody);
         return NotificationResponseDto.fromEntity(saved);
     }
 
     @Transactional(readOnly = true)
     public PagedResponseDto<NotificationResponseDto> listUserNotifications(UUID userId, int page, int size) {
         Page<NotificationResponseDto> resultPage = notificationRepository
-                .findByRecipientUserIdOrderByCreatedAtDesc(userId, PageRequest.of(page, size))
+                .findByRecipientUserIdOrderByCreatedAtDesc(userId, PagedResponseDto.pageRequest(page, size))
                 .map(NotificationResponseDto::fromEntity);
         return PagedResponseDto.from(resultPage);
     }

@@ -1,6 +1,7 @@
 package com.polink.user.service;
 
 import com.polink.audit.service.AuditLogService;
+import com.polink.auth.repository.PasswordResetTokenRepository;
 import com.polink.common.dto.PagedResponseDto;
 import com.polink.common.exception.ConflictException;
 import com.polink.common.exception.DomainException;
@@ -15,7 +16,7 @@ import com.polink.user.repository.RoleRepository;
 import com.polink.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,8 +30,11 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class UserService {
 
+    private static final Set<String> ALLOWED_USER_STATUSES = Set.of("ACTIVE", "SUSPENDED");
+
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
+    private final PasswordResetTokenRepository passwordResetTokenRepository;
     private final PasswordEncoder passwordEncoder;
     private final AuditLogService auditLogService;
     private final NotificationService notificationService;
@@ -45,8 +49,11 @@ public class UserService {
     @Transactional(readOnly = true)
     public PagedResponseDto<UserResponseDto> listUsers(String status, int page, int size) {
         String normalizedStatus = (status == null || status.isBlank()) ? null : status.trim().toUpperCase();
+        if (normalizedStatus != null && !ALLOWED_USER_STATUSES.contains(normalizedStatus)) {
+            throw new DomainException("El filtro status debe ser ACTIVE o SUSPENDED", HttpStatus.BAD_REQUEST);
+        }
         Page<UserResponseDto> pageResult = userRepository
-                .findFiltered(normalizedStatus, PageRequest.of(page, size))
+                .findFiltered(normalizedStatus, PagedResponseDto.pageRequest(page, size))
                 .map(UserResponseDto::fromEntity);
         return PagedResponseDto.from(pageResult);
     }
@@ -100,10 +107,24 @@ public class UserService {
         UserEntity targetUser = userRepository.findById(targetUserId)
                 .orElseThrow(() -> new ResourceNotFoundException("Usuario objetivo no encontrado"));
 
+        boolean targetIsAdmin = targetUser.getRoles() != null && targetUser.getRoles().stream()
+                .anyMatch(role -> "ROLE_ADMIN".equalsIgnoreCase(role.getName()));
+        if (targetIsAdmin) {
+            throw new DomainException("No está permitido modificar el estado de una cuenta con rol ROLE_ADMIN");
+        }
+
         String newStatus = request.status().trim().toUpperCase();
+        if (newStatus.equalsIgnoreCase(targetUser.getStatus())) {
+            return UserResponseDto.fromEntity(targetUser);
+        }
+
         targetUser.setStatus(newStatus);
         targetUser.setUpdatedAt(Instant.now());
         UserEntity saved = userRepository.save(targetUser);
+
+        if ("SUSPENDED".equals(newStatus)) {
+            passwordResetTokenRepository.invalidateAllActiveTokensForUser(saved.getId());
+        }
 
         auditLogService.recordAction(
                 adminUserId,

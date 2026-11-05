@@ -1,13 +1,17 @@
 package com.polink.common.exception;
 
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 import java.time.Instant;
@@ -46,6 +50,45 @@ public class GlobalExceptionHandler {
                 validationErrors
         );
         return ResponseEntity.badRequest().body(body);
+    }
+
+    @ExceptionHandler({
+            HttpMessageNotReadableException.class,
+            MethodArgumentTypeMismatchException.class,
+            MissingServletRequestParameterException.class,
+            IllegalArgumentException.class
+    })
+    public ResponseEntity<ApiErrorResponse> handleBadRequestExceptions(Exception ex, HttpServletRequest request) {
+        String message = "Solicitud inválida o parámetros con formato incorrecto";
+        if (ex instanceof MethodArgumentTypeMismatchException mismatch) {
+            message = "El parámetro '" + mismatch.getName() + "' tiene un formato inválido";
+        } else if (ex instanceof MissingServletRequestParameterException missing) {
+            message = "Falta el parámetro obligatorio '" + missing.getParameterName() + "'";
+        } else if (ex instanceof IllegalArgumentException illegal && illegal.getMessage() != null) {
+            message = illegal.getMessage();
+        }
+        ApiErrorResponse body = new ApiErrorResponse(
+                Instant.now(),
+                HttpStatus.BAD_REQUEST.value(),
+                HttpStatus.BAD_REQUEST.getReasonPhrase(),
+                message,
+                request.getRequestURI(),
+                Map.of()
+        );
+        return ResponseEntity.badRequest().body(body);
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ApiErrorResponse> handleDataIntegrityViolation(DataIntegrityViolationException ex, HttpServletRequest request) {
+        ApiErrorResponse body = new ApiErrorResponse(
+                Instant.now(),
+                HttpStatus.CONFLICT.value(),
+                HttpStatus.CONFLICT.getReasonPhrase(),
+                "Conflicto de integridad de datos: el recurso ya existe o viola una restricción única",
+                request.getRequestURI(),
+                Map.of()
+        );
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
     }
 
     @ExceptionHandler(MaxUploadSizeExceededException.class)
